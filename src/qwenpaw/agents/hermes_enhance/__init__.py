@@ -1,22 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Hermes Enhancement for QwenPaw
-===============================
+Hermes Enhancement for QwenPaw (精简版)
+=======================================
 
-Complete Hermes Agent modules adapted for QwenPaw
+仅保留 QwenPaw 原有代码未覆盖的独特功能：
+- ContextCompressor: 丰富的上下文压缩策略（Resolved/Pending 问题跟踪、Handoff framing 等）
+- usage_pricing: 美元计费功能
 
 Source: https://github.com/NousResearch/hermes-agent
-
-Quick start:
-    from qwenpaw.agents.hermes_enhance import setup
-    setup()
-    from qwenpaw.agents.hermes_enhance import ContextCompressor
 """
 
 from __future__ import annotations
 
 import logging
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +26,9 @@ except Exception as e:
 
 def setup() -> bool:
     """Setup Hermes compatibility layer
-    
+
     Call this before importing Hermes modules
-    
+
     Returns:
         bool: True if successful
     """
@@ -46,48 +42,12 @@ def setup() -> bool:
         return False
 
 
-def get_hermes_home() -> str:
-    """Get Hermes home directory"""
-    from ._compat import get_hermes_home
-    return get_hermes_home()
-
-
-def get_skills_dir() -> str:
-    """Get skills directory"""
-    from ._compat import get_skills_dir
-    return get_skills_dir()
-
-
 # Import key classes/functions
 try:
     from .context_compressor import ContextCompressor
 except ImportError as e:
     logger.warning(f"Could not import ContextCompressor: {e}")
     ContextCompressor = None
-
-try:
-    from .memory_manager import MemoryManager
-except ImportError as e:
-    logger.warning(f"Could not import MemoryManager: {e}")
-    MemoryManager = None
-
-try:
-    from .memory_provider import MemoryProvider
-except ImportError as e:
-    logger.warning(f"Could not import MemoryProvider: {e}")
-    MemoryProvider = None
-
-try:
-    from .retry_utils import jittered_backoff
-except ImportError as e:
-    logger.warning(f"Could not import jittered_backoff: {e}")
-    jittered_backoff = None
-
-try:
-    from .rate_limit_tracker import RateLimitState
-except ImportError as e:
-    logger.warning(f"Could not import RateLimitState: {e}")
-    RateLimitState = None
 
 try:
     from .usage_pricing import CostResult, CanonicalUsage
@@ -102,39 +62,15 @@ except ImportError as e:
     logger.warning(f"Could not import model_metadata: {e}")
     get_model_context_length = None
 
-try:
-    from .skill_utils import parse_frontmatter
-except ImportError as e:
-    logger.warning(f"Could not import parse_frontmatter: {e}")
-    parse_frontmatter = None
-
 
 __all__ = [
     # Setup
     "setup",
-    "get_hermes_home",
-    "get_skills_dir",
-    
     # Context Compressor
     "ContextCompressor",
-    
-    # Memory
-    "MemoryProvider",
-    "MemoryManager",
-    
-    # Retry
-    "jittered_backoff",
-    
-    # Rate Limit
-    "RateLimitState",
-    
     # Pricing
     "CostResult",
     "CanonicalUsage",
-    
     # Model
     "get_model_context_length",
-    
-    # Skills
-    "parse_frontmatter",
 ]
