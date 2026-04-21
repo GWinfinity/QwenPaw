@@ -10,6 +10,12 @@ import type {
   TokenUsageStats,
 } from "../../../api/types/tokenUsage";
 import { formatCompact } from "../../../utils/formatNumber";
+
+function formatCost(n: number): string {
+  if (n <= 0) return "$0.0000";
+  if (n < 0.0001) return "<$0.0001";
+  return `$${n.toFixed(4)}`;
+}
 import { LoadingState, EmptyState } from "./components";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMessage } from "../../../hooks/useAppMessage";
@@ -109,6 +115,12 @@ function TokenUsagePage() {
         key: "call_count",
         render: (n: number) => formatCompact(n),
       },
+      {
+        title: t("tokenUsage.cost"),
+        dataIndex: "cost_usd",
+        key: "cost_usd",
+        render: (n: number) => formatCost(n),
+      },
     ],
     [t],
   );
@@ -133,6 +145,12 @@ function TokenUsagePage() {
         dataIndex: "call_count",
         key: "call_count",
         render: (n: number) => formatCompact(n),
+      },
+      {
+        title: t("tokenUsage.cost"),
+        dataIndex: "cost_usd",
+        key: "cost_usd",
+        render: (n: number) => formatCost(n),
       },
     ],
     [t],
@@ -178,6 +196,14 @@ function TokenUsagePage() {
                     </div>
                     <div className={styles.cardLabel}>
                       {t("tokenUsage.completionTokens")}
+                    </div>
+                  </Card>
+                  <Card className={styles.card}>
+                    <div className={styles.cardValue}>
+                      {formatCost(data.total_cost_usd)}
+                    </div>
+                    <div className={styles.cardLabel}>
+                      {t("tokenUsage.totalCost")}
                     </div>
                   </Card>
                 </div>

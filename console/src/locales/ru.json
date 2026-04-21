@@ -678,6 +678,8 @@
     "totalCalls": "Всего вызовов",
     "promptTokens": "Входные токены",
     "completionTokens": "Выходные токены",
+    "cost": "Стоимость (USD)",
+    "totalCost": "Общая стоимость",
     "byModel": "По модели",
     "byDate": "По дате",
     "provider": "Провайдер",

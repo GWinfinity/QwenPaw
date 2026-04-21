@@ -836,6 +836,8 @@
     "totalCalls": "Total Calls",
     "promptTokens": "Prompt Tokens",
     "completionTokens": "Completion Tokens",
+    "cost": "Cost (USD)",
+    "totalCost": "Total Cost",
     "byModel": "By Model",
     "byDate": "By Date",
     "provider": "Provider",

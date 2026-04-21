@@ -5,12 +5,14 @@ export interface TokenUsageStats {
   prompt_tokens: number;
   completion_tokens: number;
   call_count: number;
+  cost_usd: number;
 }
 
 export interface TokenUsageSummary {
   total_prompt_tokens: number;
   total_completion_tokens: number;
   total_calls: number;
+  total_cost_usd: number;
   by_model: Record<string, TokenUsageStats>;
   by_date: Record<string, TokenUsageStats>;
 }

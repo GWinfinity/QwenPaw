@@ -9,9 +9,14 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import aiofiles
+from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from ..constant import WORKING_DIR, TOKEN_USAGE_FILE
+from ..agents.hermes_enhance.usage_pricing import (
+    resolve_billing_route,
+    _lookup_official_docs_pricing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +27,7 @@ class TokenUsageStats(BaseModel):
     prompt_tokens: int = Field(0, ge=0)
     completion_tokens: int = Field(0, ge=0)
     call_count: int = Field(0, ge=0)
+    cost_usd: float = Field(0.0, ge=0.0)
 
 
 class TokenUsageRecord(TokenUsageStats):
@@ -45,6 +51,7 @@ class TokenUsageSummary(BaseModel):
     total_prompt_tokens: int = Field(0, ge=0)
     total_completion_tokens: int = Field(0, ge=0)
     total_calls: int = Field(0, ge=0)
+    total_cost_usd: float = Field(0.0, ge=0.0)
     by_model: dict[str, TokenUsageByModel] = Field(
         default_factory=dict,
         description="Per composite key (provider:model)",
@@ -57,6 +64,27 @@ class TokenUsageSummary(BaseModel):
         default_factory=dict,
         description="Per date (YYYY-MM-DD)",
     )
+
+
+def _calc_cost(prompt_tokens: int, completion_tokens: int, model: str, provider: str = "") -> float:
+    """Calculate estimated USD cost using Hermes local pricing table.
+
+    Uses the built-in _OFFICIAL_DOCS_PRICING from Hermes usage_pricing,
+    which is a snapshot of official provider docs. No network calls.
+    """
+    try:
+        route = resolve_billing_route(model, provider=provider or None)
+        entry = _lookup_official_docs_pricing(route)
+        if not entry:
+            return 0.0
+        cost = Decimal(0)
+        if entry.input_cost_per_million is not None:
+            cost += Decimal(prompt_tokens) * entry.input_cost_per_million / Decimal("1000000")
+        if entry.output_cost_per_million is not None:
+            cost += Decimal(completion_tokens) * entry.output_cost_per_million / Decimal("1000000")
+        return float(cost)
+    except Exception:
+        return 0.0
 
 
 class TokenUsageManager:
@@ -223,6 +251,7 @@ class TokenUsageManager:
         total_prompt = 0
         total_completion = 0
         total_calls = 0
+        total_cost = 0.0
         by_model_raw: dict[str, dict] = {}
         by_provider_raw: dict[str, dict] = {}
         by_date_raw: dict[str, dict] = {}
@@ -231,9 +260,11 @@ class TokenUsageManager:
             pt = r.prompt_tokens
             ct = r.completion_tokens
             calls = r.call_count
+            cost = _calc_cost(pt, ct, r.model, r.provider_id)
             total_prompt += pt
             total_completion += ct
             total_calls += calls
+            total_cost += cost
 
             model = r.model
             prov = r.provider_id
@@ -245,20 +276,24 @@ class TokenUsageManager:
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                     "call_count": 0,
+                    "cost_usd": 0.0,
                 }
             by_model_raw[composite]["prompt_tokens"] += pt
             by_model_raw[composite]["completion_tokens"] += ct
             by_model_raw[composite]["call_count"] += calls
+            by_model_raw[composite]["cost_usd"] += cost
 
             if prov not in by_provider_raw:
                 by_provider_raw[prov] = {
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                     "call_count": 0,
+                    "cost_usd": 0.0,
                 }
             by_provider_raw[prov]["prompt_tokens"] += pt
             by_provider_raw[prov]["completion_tokens"] += ct
             by_provider_raw[prov]["call_count"] += calls
+            by_provider_raw[prov]["cost_usd"] += cost
 
             dt = r.date
             if dt not in by_date_raw:
@@ -266,10 +301,12 @@ class TokenUsageManager:
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                     "call_count": 0,
+                    "cost_usd": 0.0,
                 }
             by_date_raw[dt]["prompt_tokens"] += pt
             by_date_raw[dt]["completion_tokens"] += ct
             by_date_raw[dt]["call_count"] += calls
+            by_date_raw[dt]["cost_usd"] += cost
 
         by_model = {
             k: TokenUsageByModel.model_validate(v)
@@ -288,6 +325,7 @@ class TokenUsageManager:
             total_prompt_tokens=total_prompt,
             total_completion_tokens=total_completion,
             total_calls=total_calls,
+            total_cost_usd=round(total_cost, 6),
             by_model=by_model,
             by_provider=by_provider,
             by_date=by_date,

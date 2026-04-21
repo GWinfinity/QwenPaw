@@ -678,6 +678,8 @@
     "totalCalls": "総呼び出し回数",
     "promptTokens": "入力 Token",
     "completionTokens": "出力 Token",
+    "cost": "費用 (USD)",
+    "totalCost": "総費用",
     "byModel": "モデル別",
     "byDate": "日付別",
     "provider": "プロバイダー",

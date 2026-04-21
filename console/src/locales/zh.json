@@ -693,6 +693,8 @@
     "totalCalls": "总调用次数",
     "promptTokens": "输入 Token",
     "completionTokens": "输出 Token",
+    "cost": "费用 (USD)",
+    "totalCost": "总费用",
     "byModel": "按模型",
     "byDate": "按日期",
     "provider": "提供商",
