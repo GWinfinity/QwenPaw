@@ -838,6 +838,8 @@
     "completionTokens": "Completion Tokens",
     "cost": "Cost (USD)",
     "totalCost": "Total Cost",
+    "costCNY": "Cost (CNY)",
+    "totalCostCNY": "Total Cost (CNY)",
     "byModel": "By Model",
     "byDate": "By Date",
     "provider": "Provider",

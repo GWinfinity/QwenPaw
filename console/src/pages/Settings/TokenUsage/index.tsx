@@ -16,6 +16,12 @@ function formatCost(n: number): string {
   if (n < 0.0001) return "<$0.0001";
   return `$${n.toFixed(4)}`;
 }
+
+function formatCostCNY(n: number): string {
+  if (n <= 0) return "¥0.0000";
+  if (n < 0.0001) return "<¥0.0001";
+  return `¥${n.toFixed(4)}`;
+}
 import { LoadingState, EmptyState } from "./components";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMessage } from "../../../hooks/useAppMessage";
@@ -121,6 +127,12 @@ function TokenUsagePage() {
         key: "cost_usd",
         render: (n: number) => formatCost(n),
       },
+      {
+        title: t("tokenUsage.costCNY"),
+        dataIndex: "cost_cny",
+        key: "cost_cny",
+        render: (n: number) => formatCostCNY(n),
+      },
     ],
     [t],
   );
@@ -151,6 +163,12 @@ function TokenUsagePage() {
         dataIndex: "cost_usd",
         key: "cost_usd",
         render: (n: number) => formatCost(n),
+      },
+      {
+        title: t("tokenUsage.costCNY"),
+        dataIndex: "cost_cny",
+        key: "cost_cny",
+        render: (n: number) => formatCostCNY(n),
       },
     ],
     [t],
@@ -204,6 +222,14 @@ function TokenUsagePage() {
                     </div>
                     <div className={styles.cardLabel}>
                       {t("tokenUsage.totalCost")}
+                    </div>
+                  </Card>
+                  <Card className={styles.card}>
+                    <div className={styles.cardValue}>
+                      {formatCostCNY(data.total_cost_cny)}
+                    </div>
+                    <div className={styles.cardLabel}>
+                      {t("tokenUsage.totalCostCNY")}
                     </div>
                   </Card>
                 </div>

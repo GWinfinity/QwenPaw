@@ -680,6 +680,8 @@
     "completionTokens": "Выходные токены",
     "cost": "Стоимость (USD)",
     "totalCost": "Общая стоимость",
+    "costCNY": "Стоимость (CNY)",
+    "totalCostCNY": "Общая стоимость (CNY)",
     "byModel": "По модели",
     "byDate": "По дате",
     "provider": "Провайдер",

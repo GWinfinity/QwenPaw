@@ -680,6 +680,8 @@
     "completionTokens": "出力 Token",
     "cost": "費用 (USD)",
     "totalCost": "総費用",
+    "costCNY": "費用 (CNY)",
+    "totalCostCNY": "総費用 (CNY)",
     "byModel": "モデル別",
     "byDate": "日付別",
     "provider": "プロバイダー",

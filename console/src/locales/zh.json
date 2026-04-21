@@ -695,6 +695,8 @@
     "completionTokens": "输出 Token",
     "cost": "费用 (USD)",
     "totalCost": "总费用",
+    "costCNY": "费用 (CNY)",
+    "totalCostCNY": "总费用 (CNY)",
     "byModel": "按模型",
     "byDate": "按日期",
     "provider": "提供商",

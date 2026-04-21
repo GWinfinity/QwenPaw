@@ -28,6 +28,7 @@ class TokenUsageStats(BaseModel):
     completion_tokens: int = Field(0, ge=0)
     call_count: int = Field(0, ge=0)
     cost_usd: float = Field(0.0, ge=0.0)
+    cost_cny: float = Field(0.0, ge=0.0)
 
 
 class TokenUsageRecord(TokenUsageStats):
@@ -52,6 +53,7 @@ class TokenUsageSummary(BaseModel):
     total_completion_tokens: int = Field(0, ge=0)
     total_calls: int = Field(0, ge=0)
     total_cost_usd: float = Field(0.0, ge=0.0)
+    total_cost_cny: float = Field(0.0, ge=0.0)
     by_model: dict[str, TokenUsageByModel] = Field(
         default_factory=dict,
         description="Per composite key (provider:model)",
@@ -66,25 +68,74 @@ class TokenUsageSummary(BaseModel):
     )
 
 
-def _calc_cost(prompt_tokens: int, completion_tokens: int, model: str, provider: str = "") -> float:
-    """Calculate estimated USD cost using Hermes local pricing table.
+# CNY pricing for domestic models (snapshot from official docs, may drift).
+# Key: (provider_lower, model_lower) -> (input_cny_per_million, output_cny_per_million)
+_CNY_PRICING: dict[tuple[str, str], tuple[float, float]] = {
+    # DeepSeek
+    ("deepseek", "deepseek-chat"): (1.0, 2.0),
+    ("deepseek", "deepseek-reasoner"): (1.0, 4.0),
+    # DashScope / Alibaba
+    ("dashscope", "qwen3-max"): (2.0, 6.0),
+    ("dashscope", "qwen3.6-plus"): (0.8, 2.0),
+    ("dashscope", "qwen-turbo"): (0.3, 0.6),
+    ("dashscope", "deepseek-v3.2"): (1.0, 2.0),
+    # Zhipu
+    ("zhipu", "glm-4"): (1.0, 2.0),
+    ("zhipu", "glm-4-flash"): (0.1, 0.1),
+    # Moonshot
+    ("moonshot", "moonshot-v1-8k"): (1.2, 1.2),
+    # Baidu
+    ("baidu", "ernie-4.0"): (3.0, 6.0),
+}
 
-    Uses the built-in _OFFICIAL_DOCS_PRICING from Hermes usage_pricing,
-    which is a snapshot of official provider docs. No network calls.
+_USD_TO_CNY_RATE: float = 7.2
+
+
+def _calc_costs(
+    prompt_tokens: int,
+    completion_tokens: int,
+    model: str,
+    provider: str = "",
+) -> tuple[float, float]:
+    """Calculate estimated USD and CNY costs.
+
+    - USD: uses Hermes _OFFICIAL_DOCS_PRICING (local, no network).
+    - CNY: uses native CNY pricing table for domestic models;
+           falls back to USD * exchange rate for foreign models.
+
+    Returns:
+        (usd_cost, cny_cost)
     """
+    usd_cost = 0.0
+    cny_cost = 0.0
     try:
         route = resolve_billing_route(model, provider=provider or None)
-        entry = _lookup_official_docs_pricing(route)
-        if not entry:
-            return 0.0
-        cost = Decimal(0)
-        if entry.input_cost_per_million is not None:
-            cost += Decimal(prompt_tokens) * entry.input_cost_per_million / Decimal("1000000")
-        if entry.output_cost_per_million is not None:
-            cost += Decimal(completion_tokens) * entry.output_cost_per_million / Decimal("1000000")
-        return float(cost)
+
+        # USD lookup
+        entry_usd = _lookup_official_docs_pricing(route)
+        if entry_usd:
+            cost = Decimal(0)
+            if entry_usd.input_cost_per_million is not None:
+                cost += Decimal(prompt_tokens) * entry_usd.input_cost_per_million / Decimal("1000000")
+            if entry_usd.output_cost_per_million is not None:
+                cost += Decimal(completion_tokens) * entry_usd.output_cost_per_million / Decimal("1000000")
+            usd_cost = float(cost)
+
+        # CNY lookup — native CNY pricing for domestic providers
+        norm_provider = (provider or "").strip().lower()
+        norm_model = (model or "").strip().lower()
+        cny_entry = _CNY_PRICING.get((norm_provider, norm_model))
+        if cny_entry:
+            cny_cost = (
+                prompt_tokens * cny_entry[0]
+                + completion_tokens * cny_entry[1]
+            ) / 1_000_000
+        elif usd_cost > 0:
+            # Fallback: convert USD to CNY for models without native CNY table
+            cny_cost = usd_cost * _USD_TO_CNY_RATE
     except Exception:
-        return 0.0
+        pass
+    return usd_cost, cny_cost
 
 
 class TokenUsageManager:
@@ -251,7 +302,8 @@ class TokenUsageManager:
         total_prompt = 0
         total_completion = 0
         total_calls = 0
-        total_cost = 0.0
+        total_cost_usd = 0.0
+        total_cost_cny = 0.0
         by_model_raw: dict[str, dict] = {}
         by_provider_raw: dict[str, dict] = {}
         by_date_raw: dict[str, dict] = {}
@@ -260,11 +312,12 @@ class TokenUsageManager:
             pt = r.prompt_tokens
             ct = r.completion_tokens
             calls = r.call_count
-            cost = _calc_cost(pt, ct, r.model, r.provider_id)
+            cost_usd, cost_cny = _calc_costs(pt, ct, r.model, r.provider_id)
             total_prompt += pt
             total_completion += ct
             total_calls += calls
-            total_cost += cost
+            total_cost_usd += cost_usd
+            total_cost_cny += cost_cny
 
             model = r.model
             prov = r.provider_id
@@ -277,11 +330,13 @@ class TokenUsageManager:
                     "completion_tokens": 0,
                     "call_count": 0,
                     "cost_usd": 0.0,
+                    "cost_cny": 0.0,
                 }
             by_model_raw[composite]["prompt_tokens"] += pt
             by_model_raw[composite]["completion_tokens"] += ct
             by_model_raw[composite]["call_count"] += calls
-            by_model_raw[composite]["cost_usd"] += cost
+            by_model_raw[composite]["cost_usd"] += cost_usd
+            by_model_raw[composite]["cost_cny"] += cost_cny
 
             if prov not in by_provider_raw:
                 by_provider_raw[prov] = {
@@ -289,11 +344,13 @@ class TokenUsageManager:
                     "completion_tokens": 0,
                     "call_count": 0,
                     "cost_usd": 0.0,
+                    "cost_cny": 0.0,
                 }
             by_provider_raw[prov]["prompt_tokens"] += pt
             by_provider_raw[prov]["completion_tokens"] += ct
             by_provider_raw[prov]["call_count"] += calls
-            by_provider_raw[prov]["cost_usd"] += cost
+            by_provider_raw[prov]["cost_usd"] += cost_usd
+            by_provider_raw[prov]["cost_cny"] += cost_cny
 
             dt = r.date
             if dt not in by_date_raw:
@@ -302,11 +359,13 @@ class TokenUsageManager:
                     "completion_tokens": 0,
                     "call_count": 0,
                     "cost_usd": 0.0,
+                    "cost_cny": 0.0,
                 }
             by_date_raw[dt]["prompt_tokens"] += pt
             by_date_raw[dt]["completion_tokens"] += ct
             by_date_raw[dt]["call_count"] += calls
-            by_date_raw[dt]["cost_usd"] += cost
+            by_date_raw[dt]["cost_usd"] += cost_usd
+            by_date_raw[dt]["cost_cny"] += cost_cny
 
         by_model = {
             k: TokenUsageByModel.model_validate(v)
@@ -325,7 +384,8 @@ class TokenUsageManager:
             total_prompt_tokens=total_prompt,
             total_completion_tokens=total_completion,
             total_calls=total_calls,
-            total_cost_usd=round(total_cost, 6),
+            total_cost_usd=round(total_cost_usd, 6),
+            total_cost_cny=round(total_cost_cny, 6),
             by_model=by_model,
             by_provider=by_provider,
             by_date=by_date,
